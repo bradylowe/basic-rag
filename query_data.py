@@ -1,3 +1,4 @@
+import os
 import argparse
 from langchain.vectorstores.chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
@@ -31,11 +32,15 @@ def main():
 
 
 def save_prompt_to_file(prompt, path='output/prompt.txt'):
+    if not os.path.exists('output'):
+        os.makedirs('output')
     with open(path, 'w') as f:
         f.write(prompt + '\n')
 
 
 def save_resources_to_file(results: list[tuple[str, int]], path='output/sorted_resources.txt'):
+    if not os.path.exists('output'):
+        os.makedirs('output')
     with open(path, 'w', encoding='utf-8') as f:
         for count, result in enumerate(results):
             f.write(f'[{result[1]}]\n{result[0]}\n')
