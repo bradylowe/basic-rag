@@ -26,21 +26,16 @@ def main():
     parser.add_argument("query_text", type=str, help="The query text.")
     parser.add_argument("--no_response", action="store_true", help="Do not query the LLM, just do nearest neighbors")
     args = parser.parse_args()
-    response = query_rag(args.query_text, run_query=not args.no_response, save_prompt=True, save_resources=True)
-    print(response)
+
+    resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response)
+
+    sources = get_ids_from_resources(resources)
+    formatted_response = format_response_for_cli(response, sources)
+    print(formatted_response)
 
 
-def save_prompt_to_file(prompt, path='output/prompt.txt'):
-    with open(path, 'w') as f:
-        f.write(prompt + '\n')
-
-
-def save_resources_to_file(results: list[tuple[str, int]], path='output/sorted_resources.txt'):
-    with open(path, 'w', encoding='utf-8') as f:
-        for count, result in enumerate(results):
-            f.write(f'[{result[1]}]\n{result[0]}\n')
-            if count < len(results) - 1:
-                f.write('\n---\n\n')
+def format_response_for_cli(response: str, sources: list[str]):
+    return f"Response: {response}\nSources: {sources}"
 
 
 def query_model(prompt: str):
@@ -50,20 +45,41 @@ def query_model(prompt: str):
     return model.invoke(prompt)
 
 
-def query_rag(query_text: str, run_query: bool = True, save_prompt: bool = False, save_resources: bool = False):
+def get_ids_from_resources(resources: list):
+    return [doc.metadata.get("id", None) for doc in resources]
+
+
+def query_rag(query_text: str, run_query: bool = True):
     """
-    Make a query to the RAG system
+    Query the vector database for resources relevant to the ``query_text``, then 
+    optionally pass the context and query to the LLM.
 
     Here are the steps taken in this function:
     ---
     
     1. Embed the user query
     2. Nearest neighbors search to find the most relevent resources
-    2a. (Optional) Save the sorted list of resources to a file
     3. Generate a prompt for the LLM using the resources and user query
-    3a. (Optional) Save the LLM query to a file
     4. Query the LLM
-    5. Print the response
+    5. Return
+
+    Parameters
+    ---
+    query_text: str
+        The text to query the database with.
+    run_query: bool
+        Whether to query the LLM or not. If False, only nearest neighbors query will run.
+
+    Returns
+    ---
+    resources: list 
+        List of relevant resources returned from DB query
+    context: str
+        The context for the LLM query
+    prompt: str
+        The prompt for the LLM query
+    response: str
+        The response from the LLM query
     """
 
     # Prepare the DB.
@@ -71,33 +87,28 @@ def query_rag(query_text: str, run_query: bool = True, save_prompt: bool = False
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
 
     # Search the DB.
-    all_results = db.similarity_search_with_score(query_text, k=100)
-    all_results = sorted(all_results, key=lambda x: x[1])
-    top_results = all_results[:5]
-    
-    # Save the sorted references to a text file
-    if save_resources:
-        save_resources_to_file(all_results)
+    resources = db.similarity_search_with_score(query_text, k=5)
+    resources = sorted(resources, key=lambda x: x[1])
 
-    # Build the context text from the search results
-    context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in top_results])
+    # Separate the resources from their scores
+    # resource_scores = [item[1] for item in resources]
+    resources = [item[0] for item in resources]
+
+    # Build the context text from the search resources
+    context_text = "\n\n---\n\n".join([doc.page_content for doc in resources])
 
     # Generate the prompt for the model
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     prompt = prompt_template.format(context=context_text, question=query_text)
-
-    # print(prompt)
-    if save_prompt:
-        save_prompt_to_file(prompt)
     
     # If no query was requested, then exit
     if not run_query:
-        return
+        return resources, context_text, prompt, None
     
     # Query the LLM
     response = query_model(prompt)
-    sources = [doc.metadata.get("id", None) for doc, _score in top_results]
-    return f"Response: {response}\nSources: {sources}"
+
+    return resources, context_text, prompt, response
 
 
 if __name__ == "__main__":
