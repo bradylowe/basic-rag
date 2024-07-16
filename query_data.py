@@ -29,9 +29,17 @@ def main():
     args = parser.parse_args()
 
     resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response)
-
     sources = get_ids_from_resources(resources)
     formatted_response = format_response_for_cli(response, sources)
+
+    print()
+    print('###  PROMPT  ###')
+    print()
+    print(prompt)
+    print()
+    print()
+    print('###  RESPONSE  ###')
+    print()
     print(formatted_response)
 
 
