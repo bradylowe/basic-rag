@@ -15,10 +15,9 @@ streamlit web app instead.
     b. If you want to use another LLM provider, just change the imports in "query_data.py" and 
     get_embedding_function.py" and connect your API key
 4. Run `python populate_database.py` or `python populate_database.py --doc_type txt`
-    a. Run `python populate_database.py -h` to see all of the options
+    a. Run `python populate_database.py -h` to see all the options
 5. Run `streamlit run .\app.py` to launch the app into a browser
         1. Run `python query_data.py "Here is my query" --no_response` to do nearest neighbors only
-5. Run the server: `streamlit run app.py`
 
 OR
 
