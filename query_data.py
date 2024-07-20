@@ -108,7 +108,7 @@ def query_rag(query_text: str, run_query: bool = True, chroma_path: str = ''):
     resources = [item[0] for item in resources]
 
     # Build the context text from the search resources
-    context_text = "\n\n---\n\n".join([doc.page_content for doc in resources])
+    context_text = "\n\n---\n\n".join([f"[{doc.metadata.get('source', 'Unknown source')}]\n{doc.page_content}" for doc in resources])
 
     # Generate the prompt for the model
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
