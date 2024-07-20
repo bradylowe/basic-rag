@@ -27,9 +27,10 @@ def main():
     parser.add_argument("--no_response", action="store_true", help="Do not query the LLM, just do nearest neighbors")
     parser.add_argument("--chroma", type=str, default=CHROMA_PATH, help="Path to the chroma db folder")
     parser.add_argument("--data", type=str, default=DATA_PATH, help="Path to data folder")
+    parser.add_argument("--k", type=int, default=5, help="Number of relevant resources to retrieve")
     args = parser.parse_args()
 
-    resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response, chroma_path=args.chroma)
+    resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response, chroma_path=args.chroma, k=args.k)
     sources = get_ids_from_resources(resources)
     formatted_response = format_response_for_cli(response, sources)
 
@@ -60,7 +61,12 @@ def get_ids_from_resources(resources: list):
     return [doc.metadata.get("id", None) for doc in resources]
 
 
-def query_rag(query_text: str, run_query: bool = True, chroma_path: str = ''):
+def query_rag(
+        query_text: str, 
+        run_query: bool = True, 
+        chroma_path: str = '',
+        k: int = 5,
+    ):
     """
     Query the vector database for resources relevant to the ``query_text``, then 
     optionally pass the context and query to the LLM.
@@ -82,6 +88,8 @@ def query_rag(query_text: str, run_query: bool = True, chroma_path: str = ''):
         Whether to query the LLM or not. If False, only nearest neighbors query will run.
     chroma_path: str
         Path to the chroma db
+    k: int
+        Number of relevant resources to retrieve from the db
 
     Returns
     ---
@@ -100,7 +108,7 @@ def query_rag(query_text: str, run_query: bool = True, chroma_path: str = ''):
     db = Chroma(persist_directory=chroma_path or CHROMA_PATH, embedding_function=embedding_function)
 
     # Search the DB.
-    resources = db.similarity_search_with_score(query_text, k=5)
+    resources = db.similarity_search_with_score(query_text, k=k)
     resources = sorted(resources, key=lambda x: x[1])
 
     # Separate the resources from their scores
