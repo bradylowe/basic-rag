@@ -20,7 +20,7 @@ def main():
             st.session_state.response = response
             if response:
                 st.success("Successfully fetched relevant resources and queried the LLM.")
-                st.text(response.content)
+                st.markdown(response.content)
             else:
                 st.success("Successfully fetched relevant resources without querying the LLM.")
     
