@@ -5,10 +5,9 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_community.llms.ollama import Ollama
 from langchain_openai.chat_models import ChatOpenAI
 
-from config import OPENAI_API_KEY
+from config import OPENAI_API_KEY, CHROMA_PATH, DATA_PATH
 from get_embedding_function import get_embedding_function
 
-CHROMA_PATH = "chroma"
 
 PROMPT_TEMPLATE = """
 Answer the question based only on the following context:
@@ -26,9 +25,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("query_text", type=str, help="The query text.")
     parser.add_argument("--no_response", action="store_true", help="Do not query the LLM, just do nearest neighbors")
+    parser.add_argument("--chroma", type=str, default=CHROMA_PATH, help="Path to the chroma db folder")
+    parser.add_argument("--data", type=str, default=DATA_PATH, help="Path to data folder")
     args = parser.parse_args()
 
-    resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response)
+    resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response, chroma_path=args.chroma)
     sources = get_ids_from_resources(resources)
     formatted_response = format_response_for_cli(response, sources)
 
@@ -58,7 +59,7 @@ def get_ids_from_resources(resources: list):
     return [doc.metadata.get("id", None) for doc in resources]
 
 
-def query_rag(query_text: str, run_query: bool = True):
+def query_rag(query_text: str, run_query: bool = True, chroma_path: str = ''):
     """
     Query the vector database for resources relevant to the ``query_text``, then 
     optionally pass the context and query to the LLM.
@@ -78,6 +79,8 @@ def query_rag(query_text: str, run_query: bool = True):
         The text to query the database with.
     run_query: bool
         Whether to query the LLM or not. If False, only nearest neighbors query will run.
+    chroma_path: str
+        Path to the chroma db
 
     Returns
     ---
@@ -93,7 +96,7 @@ def query_rag(query_text: str, run_query: bool = True):
 
     # Prepare the DB.
     embedding_function = get_embedding_function()
-    db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
+    db = Chroma(persist_directory=chroma_path or CHROMA_PATH, embedding_function=embedding_function)
 
     # Search the DB.
     resources = db.similarity_search_with_score(query_text, k=5)

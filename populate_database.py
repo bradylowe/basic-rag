@@ -10,10 +10,9 @@ from langchain.schema.document import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.vectorstores.chroma import Chroma
 
+from config import CHROMA_PATH, DATA_PATH
 from get_embedding_function import get_embedding_function
 
-CHROMA_PATH = "chroma_pta"
-DATA_PATH = "C:/Users/ilove/Documents/Tendoy PTA"
 
 SUPPORTED_DOC_TYPES = ["pdf", "txt"]
 
@@ -24,19 +23,21 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--reset", action="store_true", help="Reset the database.")
     parser.add_argument("--doc_type", type=str, default="pdf", choices=SUPPORTED_DOC_TYPES)
+    parser.add_argument("--chroma", type=str, default=CHROMA_PATH, help="Path to chroma db folder")
+    parser.add_argument("--data", type=str, default=DATA_PATH, help="Path to data folder")
     args = parser.parse_args()
     
     # Check if the database should be cleared (using the --clear flag).
     if args.reset:
         print("✨ Clearing Database")
-        clear_database()
+        clear_database(args.chroma)
     
     # Create the right kind of file loader
     if args.doc_type == "pdf":
-        loader = PyPDFDirectoryLoader(DATA_PATH)
+        loader = PyPDFDirectoryLoader(args.data)
     elif args.doc_type == "txt":
         loader = DirectoryLoader(
-            DATA_PATH, 
+            args.data, 
             glob="**/*.txt", 
             loader_cls=TextLoader,
             loader_kwargs={"autodetect_encoding": True},
@@ -50,7 +51,7 @@ def main():
     add_ids_to_chunks(chunks)
     
     # Add records to DB
-    add_to_chroma(chunks)
+    add_to_chroma(args.chroma, chunks)
 
 
 def split_documents(documents: list[Document], chunk_size: int = 800, chunk_overlap: int = 80):
@@ -65,12 +66,13 @@ def split_documents(documents: list[Document], chunk_size: int = 800, chunk_over
     return text_splitter.split_documents(documents)
 
 
-def add_to_chroma(chunks: list[Document]):
+def add_to_chroma(db_path: str, chunks: list[Document]):
     """Add a list of chunks to the db
     """
     # Load the existing database.
     db = Chroma(
-        persist_directory=CHROMA_PATH, embedding_function=get_embedding_function()
+        persist_directory=db_path, 
+        embedding_function=get_embedding_function()
     )
 
     # Add or Update the documents.
@@ -90,7 +92,7 @@ def add_to_chroma(chunks: list[Document]):
         print("✅ No new documents to add")
 
 
-def add_ids_to_chunks(chunks):
+def add_ids_to_chunks(chunks: list[Document]):
     """Calculate unique IDs and add them to the chunk metadata inplace for each chunk
     """
 
@@ -117,11 +119,11 @@ def add_ids_to_chunks(chunks):
         chunk.metadata["id"] = chunk_id
 
 
-def clear_database():
+def clear_database(db_path: str):
     """Clear the database
     """
-    if os.path.exists(CHROMA_PATH):
-        shutil.rmtree(CHROMA_PATH)
+    if os.path.exists(db_path):
+        shutil.rmtree(db_path)
 
 
 if __name__ == "__main__":
