@@ -51,7 +51,8 @@ def format_response_for_cli(response: str, sources: list[str]):
 def query_model(prompt: str):
     #model = Ollama(model="mistral")
     #model = ChatOpenAI(model="gpt-4o", api_key=OPENAI_API_KEY)  # 10x cost, 10x quality
-    model = ChatOpenAI(model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
+    model = ChatOpenAI(model="gpt-4o-mini", api_key=OPENAI_API_KEY)  # 0.25x cost, 11x quality
+    #model = ChatOpenAI(model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
     return model.invoke(prompt)
 
 
