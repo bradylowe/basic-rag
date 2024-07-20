@@ -1,4 +1,3 @@
-import argparse
 from collections import defaultdict
 import os
 import shutil
@@ -11,7 +10,7 @@ from langchain.schema.document import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.vectorstores.chroma import Chroma
 
-from config import CHROMA_PATH, DATA_PATH
+from config import CHROMA_PATH, DATA_PATH, MAX_EMBEDDING_BATCH_SIZE
 from get_embedding_function import get_embedding_function
 
 
@@ -50,6 +49,13 @@ def split_documents(documents: list[Document], chunk_size: int = 800, chunk_over
     return text_splitter.split_documents(documents)
 
 
+def add_batch_to_chroma(db, batch: list[Document]):
+    """Add a batch of documents to chroma db"""
+    print(f"➕ Adding new documents: {len(batch)}")
+    batch_ids = [chunk.metadata["id"] for chunk in batch]
+    db.add_documents(batch, ids=batch_ids)
+
+
 def add_to_chroma(db_path: str, chunks: list[Document]):
     """Add a long list of chunks to the db"""
     db = Chroma(
@@ -63,11 +69,13 @@ def add_to_chroma(db_path: str, chunks: list[Document]):
 
     new_chunks = [ch for ch in chunks if ch.metadata["id"] not in existing_ids]
 
-    # Load documents into db
-    if len(new_chunks):
-        print(f"➕ Adding new documents: {len(new_chunks)}")
-        new_chunk_ids = [chunk.metadata["id"] for chunk in new_chunks]
-        db.add_documents(new_chunks, ids=new_chunk_ids)
+    # Load documents into db (batch if necessary)
+    if len(new_chunks) > MAX_EMBEDDING_BATCH_SIZE:
+        print(f"🔎 Located {len(new_chunks)} new documents")
+        for start_idx in trange(0, len(new_chunks), MAX_EMBEDDING_BATCH_SIZE, desc="Loading chunks"):
+            add_batch_to_chroma(db, new_chunks[start_idx:start_idx + MAX_EMBEDDING_BATCH_SIZE])
+    elif len(new_chunks) > 0:
+        add_batch_to_chroma(db, new_chunks)
     else:
         print("✅ No new documents to add")
 
