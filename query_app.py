@@ -25,6 +25,8 @@ def main():
         st.session_state.chunk_size = 1000
     if "chunk_overlap" not in st.session_state:
         st.session_state.chunk_overlap = 100
+    if "min_chunk_size" not in st.session_state:
+        st.session_state.min_chunk_size = 60
     if "doc_type" not in st.session_state:
         st.session_state.doc_type = SUPPORTED_DOC_TYPES[0]
     if "recursive" not in st.session_state:
@@ -93,13 +95,15 @@ def main():
         chroma_path = st.text_input("**Chroma DB Path** (Save to):", value=st.session_state.chroma_path)
         dataset_folder = st.text_input("**Dataset Folder Path** (Load from):", value=st.session_state.dataset_folder)
 
-        col1, col2, col3 = st.columns([2, 1, 1])
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         with col1:
             doc_type = st.selectbox("**Document Type**:", ["pdf", "txt"], key=st.session_state.doc_type)
         with col2:
             chunk_size = st.number_input("**Chunk Size**", value=st.session_state.chunk_size)
         with col3:
-            chunk_overlap = st.number_input("**Chunk overlap**", value=st.session_state.chunk_overlap)
+            chunk_overlap = st.number_input("**Chunk Overlap**", value=st.session_state.chunk_overlap)
+        with col4:
+            min_chunk_size = st.number_input("**Min Chunk Size**", value=st.session_state.min_chunk_size)
         
         recursive = st.checkbox("Load documents recursively", value=st.session_state.recursive)
 
@@ -110,6 +114,7 @@ def main():
             st.session_state.recursive = recursive
             st.session_state.chunk_size = chunk_size
             st.session_state.chunk_overlap = chunk_overlap
+            st.session_state.min_chunk_size = min_chunk_size
 
         if st.button("Load Embeddings"):
             save_state_tab_4()
@@ -119,6 +124,7 @@ def main():
                 st.session_state.doc_type,
                 chunk_size=st.session_state.chunk_size,
                 chunk_overlap=st.session_state.chunk_overlap,
+                min_chunk_size=st.session_state.min_chunk_size,
             )
             plural = "" if n_added == 1 else "s"
             st.success(f"Added {n_added} document{plural} to the database")

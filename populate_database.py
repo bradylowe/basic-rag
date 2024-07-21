@@ -38,7 +38,7 @@ def get_loader(doc_type: str, data_path: str):
         raise ValueError(f"Please set the value of `doc_type` to one of {SUPPORTED_DOC_TYPES}")
 
 
-def split_documents(documents: list[Document], chunk_size: int = 800, chunk_overlap: int = 80):
+def split_documents(documents: list[Document], chunk_size: int = 800, chunk_overlap: int = 80, min_chunk_size: int = 0):
     """Recursively split a list of documents into a longer list of shorter documents"""
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -46,7 +46,10 @@ def split_documents(documents: list[Document], chunk_size: int = 800, chunk_over
         length_function=len,
         is_separator_regex=False,
     )
-    return text_splitter.split_documents(documents)
+    documents = text_splitter.split_documents(documents)
+    if min_chunk_size:
+        documents = [doc for doc in documents if len(doc.page_content) >= min_chunk_size]
+    return documents
 
 
 def add_batch_to_chroma(db, batch: list[Document]):
@@ -108,6 +111,7 @@ def load_embeddings(
         doc_type: str, 
         chunk_size: int = 1000,
         chunk_overlap: int = 100,
+        min_chunk_size: int = 0,
         reset: bool = False,
     ):
     """Main function to load embeddings into the Chroma DB"""
@@ -117,7 +121,7 @@ def load_embeddings(
     
     loader = get_loader(doc_type, data_path)
     docs = loader.load()
-    chunks = split_documents(docs, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    chunks = split_documents(docs, chunk_size=chunk_size, chunk_overlap=chunk_overlap, min_chunk_size=min_chunk_size)
     add_ids_to_chunks(chunks)
     return add_to_chroma(chroma_path, chunks)
 
@@ -132,6 +136,7 @@ if __name__ == "__main__":
     parser.add_argument("--data", type=str, default=DATA_PATH, help="Path to data folder")
     parser.add_argument("--chunk_size", type=int, default=1000, help="Chunk size (in characters)")
     parser.add_argument("--chunk_overlap", type=int, default=100, help="Chunk overlap (in characters)")
+    parser.add_argument("--min_chunk_size", type=int, default=0, help="Minimum chunk size allowed")
     args = parser.parse_args()
     
     load_embeddings(
@@ -140,5 +145,6 @@ if __name__ == "__main__":
         args.doc_type, 
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
+        min_chunk_size=args.min_chunk_size,
         reset=args.reset,
     )
