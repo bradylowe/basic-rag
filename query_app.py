@@ -45,7 +45,7 @@ def main():
             st.session_state.k = k
             st.session_state.no_response = no_response
 
-        query = st.text_input("Enter your query:")
+        query = st.text_area("Enter your query:", height=150)
         
         if st.button("Submit"):
 
