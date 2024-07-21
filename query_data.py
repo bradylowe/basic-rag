@@ -5,10 +5,9 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_community.llms.ollama import Ollama
 from langchain_openai.chat_models import ChatOpenAI
 
-from config import OPENAI_API_KEY
+from config import OPENAI_API_KEY, CHROMA_PATH, DATA_PATH
 from get_embedding_function import get_embedding_function
 
-CHROMA_PATH = "chroma"
 
 PROMPT_TEMPLATE = """
 Answer the question based only on the following context:
@@ -26,9 +25,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("query_text", type=str, help="The query text.")
     parser.add_argument("--no_response", action="store_true", help="Do not query the LLM, just do nearest neighbors")
+    parser.add_argument("--chroma", type=str, default=CHROMA_PATH, help="Path to the chroma db folder")
+    parser.add_argument("--data", type=str, default=DATA_PATH, help="Path to data folder")
+    parser.add_argument("--k", type=int, default=5, help="Number of relevant resources to retrieve")
     args = parser.parse_args()
 
-    resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response)
+    resources, context, prompt, response = query_rag(args.query_text, run_query=not args.no_response, chroma_path=args.chroma, k=args.k)
     sources = get_ids_from_resources(resources)
     formatted_response = format_response_for_cli(response, sources)
 
@@ -50,7 +52,8 @@ def format_response_for_cli(response: str, sources: list[str]):
 def query_model(prompt: str):
     #model = Ollama(model="mistral")
     #model = ChatOpenAI(model="gpt-4o", api_key=OPENAI_API_KEY)  # 10x cost, 10x quality
-    model = ChatOpenAI(model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
+    model = ChatOpenAI(model="gpt-4o-mini", api_key=OPENAI_API_KEY)  # 0.25x cost, 11x quality
+    #model = ChatOpenAI(model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
     return model.invoke(prompt)
 
 
@@ -58,7 +61,12 @@ def get_ids_from_resources(resources: list):
     return [doc.metadata.get("id", None) for doc in resources]
 
 
-def query_rag(query_text: str, run_query: bool = True):
+def query_rag(
+        query_text: str, 
+        run_query: bool = True, 
+        chroma_path: str = '',
+        k: int = 5,
+    ):
     """
     Query the vector database for resources relevant to the ``query_text``, then 
     optionally pass the context and query to the LLM.
@@ -78,6 +86,10 @@ def query_rag(query_text: str, run_query: bool = True):
         The text to query the database with.
     run_query: bool
         Whether to query the LLM or not. If False, only nearest neighbors query will run.
+    chroma_path: str
+        Path to the chroma db
+    k: int
+        Number of relevant resources to retrieve from the db
 
     Returns
     ---
@@ -93,10 +105,10 @@ def query_rag(query_text: str, run_query: bool = True):
 
     # Prepare the DB.
     embedding_function = get_embedding_function()
-    db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
+    db = Chroma(persist_directory=chroma_path or CHROMA_PATH, embedding_function=embedding_function)
 
     # Search the DB.
-    resources = db.similarity_search_with_score(query_text, k=5)
+    resources = db.similarity_search_with_score(query_text, k=k)
     resources = sorted(resources, key=lambda x: x[1])
 
     # Separate the resources from their scores
@@ -104,7 +116,7 @@ def query_rag(query_text: str, run_query: bool = True):
     resources = [item[0] for item in resources]
 
     # Build the context text from the search resources
-    context_text = "\n\n---\n\n".join([doc.page_content for doc in resources])
+    context_text = "\n\n---\n\n".join([f"[{doc.metadata.get('source', 'Unknown source')}]\n{doc.page_content}" for doc in resources])
 
     # Generate the prompt for the model
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
