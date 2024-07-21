@@ -102,7 +102,14 @@ def add_ids_to_chunks(chunks: list[Document]):
         chunk.metadata["id"] = chunk_id
 
 
-def load_embeddings(chroma_path: str, data_path: str, doc_type: str, reset: bool = False):
+def load_embeddings(
+        chroma_path: str, 
+        data_path: str, 
+        doc_type: str, 
+        chunk_size: int = 1000,
+        chunk_overlap: int = 100,
+        reset: bool = False,
+    ):
     """Main function to load embeddings into the Chroma DB"""
     if reset:
         print("✨ Clearing Database")
@@ -110,7 +117,7 @@ def load_embeddings(chroma_path: str, data_path: str, doc_type: str, reset: bool
     
     loader = get_loader(doc_type, data_path)
     docs = loader.load()
-    chunks = split_documents(docs)
+    chunks = split_documents(docs, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     add_ids_to_chunks(chunks)
     return add_to_chroma(chroma_path, chunks)
 
@@ -123,6 +130,15 @@ if __name__ == "__main__":
     parser.add_argument("--doc_type", type=str, default="pdf", choices=SUPPORTED_DOC_TYPES)
     parser.add_argument("--chroma", type=str, default=CHROMA_PATH, help="Path to chroma db folder")
     parser.add_argument("--data", type=str, default=DATA_PATH, help="Path to data folder")
+    parser.add_argument("--chunk_size", type=int, default=1000, help="Chunk size (in characters)")
+    parser.add_argument("--chunk_overlap", type=int, default=100, help="Chunk overlap (in characters)")
     args = parser.parse_args()
     
-    load_embeddings(args.chroma, args.data, args.doc_type, reset=args.reset)
+    load_embeddings(
+        args.chroma, 
+        args.data, 
+        args.doc_type, 
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+        reset=args.reset,
+    )
