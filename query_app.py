@@ -1,7 +1,7 @@
 import streamlit as st
 
 from config import CHROMA_PATH, DATA_PATH
-from populate_database import load_embeddings, clear_database
+from populate_database import load_and_embed_documents, clear_database
 from query_data import query_rag
 
 
@@ -116,9 +116,9 @@ def main():
             st.session_state.chunk_overlap = chunk_overlap
             st.session_state.min_chunk_size = min_chunk_size
 
-        if st.button("Load Embeddings"):
+        if st.button("Create Embeddings"):
             save_state_tab_4()
-            n_added = load_embeddings(
+            n_added = load_and_embed_documents(
                 st.session_state.chroma_path, 
                 st.session_state.dataset_folder, 
                 st.session_state.doc_type,

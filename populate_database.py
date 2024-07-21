@@ -194,7 +194,7 @@ def add_ids_to_chunks(chunks: list[Document]):
         chunk.metadata["id"] = chunk_id
 
 
-def load_embeddings(
+def load_and_embed_documents(
         chroma_path: str, 
         data_path: str, 
         doc_type: str, 
@@ -202,8 +202,39 @@ def load_embeddings(
         chunk_overlap: int = 100,
         min_chunk_size: int = 0,
         reset: bool = False,
-    ):
-    """Main function to load embeddings into the Chroma DB"""
+    ) -> int:
+    """
+    Main function to load and chunk documents, calculate embeddings, 
+    and load them into Chroma DB.
+
+    Parameters:
+    -----------
+    chroma_path : str
+        Path to the Chroma database directory.
+    
+    data_path : str
+        Path to the directory containing documents to be loaded.
+    
+    doc_type : str
+        Type of documents to be loaded (e.g., 'pdf', 'txt').
+    
+    chunk_size : int, optional
+        Maximum size of each document chunk. Default is 1000.
+    
+    chunk_overlap : int, optional
+        Overlap size between consecutive document chunks. Default is 100.
+    
+    min_chunk_size : int, optional
+        Minimum size of each document chunk. Default is 0.
+    
+    reset : bool, optional
+        If True, clears the Chroma database before loading new documents. Default is False.
+
+    Returns:
+    --------
+    int
+        Number of chunks added to the Chroma database.
+    """
     if reset:
         print("✨ Clearing Database")
         clear_database(chroma_path)
@@ -228,7 +259,7 @@ if __name__ == "__main__":
     parser.add_argument("--min_chunk_size", type=int, default=0, help="Minimum chunk size allowed")
     args = parser.parse_args()
     
-    load_embeddings(
+    load_and_embed_documents(
         args.chroma, 
         args.data, 
         args.doc_type, 
