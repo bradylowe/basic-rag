@@ -56,8 +56,8 @@ def add_batch_to_chroma(db, batch: list[Document]):
     db.add_documents(batch, ids=batch_ids)
 
 
-def add_to_chroma(db_path: str, chunks: list[Document]):
-    """Add a long list of chunks to the db"""
+def add_to_chroma(db_path: str, chunks: list[Document]) -> int:
+    """Add a long list of chunks to the db and return the number of items added"""
     db = Chroma(
         persist_directory=db_path, 
         embedding_function=get_embedding_function()
@@ -78,6 +78,8 @@ def add_to_chroma(db_path: str, chunks: list[Document]):
         add_batch_to_chroma(db, new_chunks)
     else:
         print("✅ No new documents to add")
+    
+    return len(new_chunks)
 
 
 def add_ids_to_chunks(chunks: list[Document]):
@@ -110,8 +112,7 @@ def load_embeddings(chroma_path: str, data_path: str, doc_type: str, reset: bool
     docs = loader.load()
     chunks = split_documents(docs)
     add_ids_to_chunks(chunks)
-    add_to_chroma(chroma_path, chunks)
-    return "Embeddings loaded successfully"
+    return add_to_chroma(chroma_path, chunks)
 
 
 if __name__ == "__main__":
