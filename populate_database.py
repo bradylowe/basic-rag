@@ -1,3 +1,4 @@
+import ast
 from collections import defaultdict
 import os
 import shutil
@@ -38,18 +39,106 @@ def get_loader(doc_type: str, data_path: str):
         raise ValueError(f"Please set the value of `doc_type` to one of {SUPPORTED_DOC_TYPES}")
 
 
-def split_documents(documents: list[Document], chunk_size: int = 800, chunk_overlap: int = 80, min_chunk_size: int = 0):
-    """Recursively split a list of documents into a longer list of shorter documents"""
+def split_documents_basic_recursive(documents: list[Document], chunk_size: int = 1000, chunk_overlap: int = 100):
+    """
+    Split a set of documents into a larger set of smaller documents with 
+    a fixed size and overlap (in number of characters)
+    """
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         length_function=len,
         is_separator_regex=False,
     )
-    documents = text_splitter.split_documents(documents)
+    return text_splitter.split_documents(documents)
+
+
+def split_python_doc(document: Document) -> list[Document]:
+    """
+    Split a single code document into semantic chunks (functions and classes)
+
+    This function produces 3 sets of redundant chunks:
+
+    1. Simple chunks made from a constant chunk size and overlap
+    2. Chunks based on function definitions
+    3. Chunks based on class definitions
+    """
+
+    text = document.page_content
+    source = document.metadata.get('source')
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as e:
+        print(f"Couldn't parse file: {source}")
+        return []
+
+    class FunctionClassVisitor(ast.NodeVisitor):
+        def __init__(self):
+            self.chunks = []
+
+        def visit_FunctionDef(self, node):
+            start_lineno = node.lineno
+            end_lineno = node.end_lineno
+            function_text = '\n'.join(text.splitlines()[start_lineno - 1:end_lineno])
+            doc = Document(page_content=function_text, metadata={"source": source, "content_type": "function", "name": node.name})
+            self.chunks.append(doc)
+            if len(function_text) > 1000:
+                short_doc = Document(page_content=function_text[:800], metadata={"source": source, "content_type": "function_intro", "name": node.name})
+                self.chunks.append(short_doc)
+            self.generic_visit(node)
+
+        def visit_ClassDef(self, node):
+            #start_lineno = node.lineno
+            #end_lineno = node.end_lineno
+            #class_text = '\n'.join(text.splitlines()[start_lineno - 1:end_lineno])
+            class_text = self.extract_class_signature(node)
+            doc = Document(page_content=class_text, metadata={"source": source, "content_type": "class", "name": node.name})
+            self.chunks.append(doc)
+            self.generic_visit(node)
+
+        def extract_class_signature(self, node):
+            methods = []
+            for body_item in node.body:
+                if isinstance(body_item, ast.FunctionDef):
+                    methods.append(self.extract_function_signature(body_item))
+            class_signature = f"class {node.name}:\n    " + "\n    ".join(methods)
+            return class_signature
+
+        def extract_function_signature(self, node):
+            params = [arg.arg for arg in node.args.args]
+            param_list = ', '.join(params)
+            func_signature = f"def {node.name}({param_list}):"
+            return func_signature
+    
+    visitor = FunctionClassVisitor()
+    visitor.visit(tree)
+    return visitor.chunks
+
+
+def split_documents(documents: list[Document], chunk_size: int = 800, chunk_overlap: int = 80, min_chunk_size: int = 0) -> list[Document]:
+    """
+    Split the code into chunks for RAG embedding
+
+    Perform extra splitting for python files. First, do the normal 
+    recursive text splitting to get all text, comments, etc. from 
+    the python file. Then, perform a semantic chunking where we 
+    get one chunk for each class definition and function definition. 
+    """
+
+    # Do a basic recursive splitting on all documents
+    chunks = split_documents_basic_recursive(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
+    # Do extra semantic splitting for python files
+    for doc in documents:
+        if doc.metadata.get('source', '').endswith('.py'):
+            chunks.extend(split_python_doc(doc))
+
+    # Filter chunks that are too small
     if min_chunk_size:
-        documents = [doc for doc in documents if len(doc.page_content) >= min_chunk_size]
-    return documents
+        chunks = [ch for ch in chunks if len(ch.page_content) >= min_chunk_size]
+    
+    return chunks
 
 
 def add_batch_to_chroma(db, batch: list[Document]):
@@ -105,7 +194,7 @@ def add_ids_to_chunks(chunks: list[Document]):
         chunk.metadata["id"] = chunk_id
 
 
-def load_embeddings(
+def load_and_embed_documents(
         chroma_path: str, 
         data_path: str, 
         doc_type: str, 
@@ -113,8 +202,39 @@ def load_embeddings(
         chunk_overlap: int = 100,
         min_chunk_size: int = 0,
         reset: bool = False,
-    ):
-    """Main function to load embeddings into the Chroma DB"""
+    ) -> int:
+    """
+    Main function to load and chunk documents, calculate embeddings, 
+    and load them into Chroma DB.
+
+    Parameters:
+    -----------
+    chroma_path : str
+        Path to the Chroma database directory.
+    
+    data_path : str
+        Path to the directory containing documents to be loaded.
+    
+    doc_type : str
+        Type of documents to be loaded (e.g., 'pdf', 'txt').
+    
+    chunk_size : int, optional
+        Maximum size of each document chunk. Default is 1000.
+    
+    chunk_overlap : int, optional
+        Overlap size between consecutive document chunks. Default is 100.
+    
+    min_chunk_size : int, optional
+        Minimum size of each document chunk. Default is 0.
+    
+    reset : bool, optional
+        If True, clears the Chroma database before loading new documents. Default is False.
+
+    Returns:
+    --------
+    int
+        Number of chunks added to the Chroma database.
+    """
     if reset:
         print("✨ Clearing Database")
         clear_database(chroma_path)
@@ -139,7 +259,7 @@ if __name__ == "__main__":
     parser.add_argument("--min_chunk_size", type=int, default=0, help="Minimum chunk size allowed")
     args = parser.parse_args()
     
-    load_embeddings(
+    load_and_embed_documents(
         args.chroma, 
         args.data, 
         args.doc_type, 
